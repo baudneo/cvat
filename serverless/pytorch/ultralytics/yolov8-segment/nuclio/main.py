@@ -30,7 +30,7 @@ def init_context(context):
 
 
 def handler(context, event):
-    context.logger.info("Run yolo-v8 model")
+    context.logger.info("Run yolo-v8 segmentation model")
     data = event.body
     buf = io.BytesIO(base64.b64decode(data["image"]))
     threshold = float(data.get("threshold", 0.5))
@@ -39,7 +39,7 @@ def handler(context, event):
 
     yolo_results = context.user_data.model(image, conf=threshold)[0]
     labels = yolo_results.names
-    detections = sv.Detections.from_yolov8(yolo_results)
+    detections = sv.Detections.from_ultralytics(yolo_results)
 
     detections = detections[detections.confidence > threshold]
 

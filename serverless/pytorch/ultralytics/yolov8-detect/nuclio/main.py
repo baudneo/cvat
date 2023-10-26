@@ -3,17 +3,9 @@ import base64
 from PIL import Image
 import io
 
-import numpy as np
 from ultralytics import YOLO
 import supervision as sv
-from skimage.measure import approximate_polygon, find_contours
-
-
-def to_cvat_mask(box: list, mask):
-    xtl, ytl, xbr, ybr = box
-    flattened = mask[ytl:ybr + 1, xtl:xbr + 1].flat[:].tolist()
-    flattened.extend([xtl, ytl, xbr, ybr])
-    return flattened
+from supervision import Detections
 
 
 def init_context(context):
@@ -30,7 +22,7 @@ def init_context(context):
 
 
 def handler(context, event):
-    context.logger.info("Run yolo-v8 model")
+    context.logger.info("Run yolo-v8 detection model")
     data = event.body
     buf = io.BytesIO(base64.b64decode(data["image"]))
     threshold = float(data.get("threshold", 0.5))
@@ -39,27 +31,30 @@ def handler(context, event):
 
     yolo_results = context.user_data.model(image, conf=threshold)[0]
     labels = yolo_results.names
-    detections = sv.Detections.from_yolov8(yolo_results)
+    detections: Detections = sv.Detections.from_ultralytics(yolo_results)
 
     detections = detections[detections.confidence > threshold]
 
     results = []
     if len(detections) > 0:
-
         for xyxy, mask, confidence, class_id, _ in detections:
-            mask = mask.astype(np.uint8)
-
             xtl = int(xyxy[0])
             ytl = int(xyxy[1])
             xbr = int(xyxy[2])
             ybr = int(xyxy[3])
 
-            results.append({
-                "confidence": str(confidence),
-                "label": labels.get(class_id, "unknown"),
-                "points": [xtl, ytl, xbr, ybr],
-                "type": "rectangle",
-            })
+            results.append(
+                {
+                    "confidence": str(confidence),
+                    "label": labels.get(class_id, "unknown"),
+                    "points": [xtl, ytl, xbr, ybr],
+                    "type": "rectangle",
+                }
+            )
 
-    return context.Response(body=json.dumps(results), headers={},
-                            content_type='application/json', status_code=200)
+    return context.Response(
+        body=json.dumps(results),
+        headers={},
+        content_type="application/json",
+        status_code=200,
+    )
